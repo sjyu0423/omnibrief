@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: #000000;
+  color: #e5e5e5;
+}
+
+@keyframes orb-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 18px rgba(56, 189, 248, 0.45),
+      0 0 42px rgba(56, 189, 248, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 28px rgba(56, 189, 248, 0.75),
+      0 0 64px rgba(14, 165, 233, 0.4);
+  }
+}
+
+.mic-orb {
+  animation: orb-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-enter {
+  animation: toast-in 0.25s ease-out;
+}
