@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -14,7 +14,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import tickets from './mockData.json'
+import seedTickets from './mockData.json'
 
 interface Resolution {
   title: string
@@ -58,21 +58,32 @@ const MILD_WORDS = [
   'problem',
 ]
 
+const URGENCY_RANK: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+}
+
 function randomInRange(min: number, max: number) {
   return Math.round((min + Math.random() * (max - min)) * 100) / 100
 }
 
 function containsWord(text: string, words: string[]) {
-  const lower = text.toLowerCase()
-  return words.some((word) => {
-    const pattern = new RegExp(`\\b${word}\\b`, 'i')
-    return pattern.test(lower)
-  })
+  return words.some((word) => new RegExp(`\\b${word}\\b`, 'i').test(text))
 }
 
 function findMatchedKeywords(text: string, words: string[]): string[] {
-  const lower = text.toLowerCase()
-  return words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(lower))
+  return words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(text))
+}
+
+function sortTicketsByUrgency(list: Ticket[]): Ticket[] {
+  return [...list].sort((a, b) => {
+    const rankA = URGENCY_RANK[a.urgency.toLowerCase()] ?? 99
+    const rankB = URGENCY_RANK[b.urgency.toLowerCase()] ?? 99
+    if (rankA !== rankB) return rankA - rankB
+    return a.ticketId.localeCompare(b.ticketId)
+  })
 }
 
 function buildAuditLog(
@@ -127,7 +138,10 @@ function extractBullets(rawTranscript: string): string[] {
     .split(/\n+/)
     .map((line) =>
       line
-        .replace(/^(?:Agent|User|Customer|Support|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*:\s*/i, '')
+        .replace(
+          /^(?:Agent|User|Customer|Support|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*:\s*/i,
+          '',
+        )
         .trim(),
     )
     .filter(Boolean)
@@ -165,7 +179,8 @@ function buildResolutions(urgency: string, bullets: string[]): Resolution[] {
   if (urgency === 'CRITICAL') {
     return [
       {
-        title: 'Issue full refund / credit with written confirmation within 1 hour',
+        title:
+          'Issue full refund / credit with written confirmation within 1 hour',
         evImpact: 12500 + Math.floor(Math.random() * 3500),
         churnReduction: `${78 + Math.floor(Math.random() * 8)}%`,
         riskProfile: 'Low',
@@ -271,9 +286,9 @@ function simulateAIAnalysis(rawTranscript: string): Ticket {
     sentimentLabelText = 'Positive'
   }
 
-  const ticketNum = 48000 + Math.floor(Math.random() * 999)
+  const ticketId = `ESC-${Date.now().toString().slice(-6)}`
   return {
-    ticketId: `ESC-${ticketNum}`,
+    ticketId,
     customerName: name,
     urgency,
     sentimentScore,
@@ -296,6 +311,21 @@ function urgencyStyles(urgency: string) {
       return 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
     default:
       return 'border-sky-500/40 bg-sky-500/15 text-sky-300'
+  }
+}
+
+function urgencyDot(urgency: string) {
+  switch (urgency.toLowerCase()) {
+    case 'critical':
+      return 'bg-red-500'
+    case 'high':
+      return 'bg-orange-400'
+    case 'medium':
+      return 'bg-amber-400'
+    case 'low':
+      return 'bg-emerald-400'
+    default:
+      return 'bg-zinc-500'
   }
 }
 
@@ -341,8 +371,13 @@ function riskBadgeStyles(risk: Resolution['riskProfile']) {
   }
 }
 
+const initialQueue = sortTicketsByUrgency(seedTickets as Ticket[])
+
 function App() {
-  const [activeTicket, setActiveTicket] = useState<Ticket>(tickets[0] as Ticket)
+  const [tickets, setTickets] = useState<Ticket[]>(initialQueue)
+  const [activeTicketId, setActiveTicketId] = useState<string>(
+    initialQueue[0]?.ticketId ?? '',
+  )
   const [showTranscript, setShowTranscript] = useState(false)
   const [showAuditLog, setShowAuditLog] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -350,11 +385,35 @@ function App() {
   const [rawInput, setRawInput] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
 
-  const sentimentPercent = Math.round(activeTicket.sentimentScore * 100)
+  const sortedTickets = useMemo(() => sortTicketsByUrgency(tickets), [tickets])
+  const activeTicket =
+    sortedTickets.find((t) => t.ticketId === activeTicketId) ??
+    sortedTickets[0] ??
+    null
+  const sentimentPercent = activeTicket
+    ? Math.round(activeTicket.sentimentScore * 100)
+    : 0
+
+  function selectTicket(ticketId: string) {
+    setActiveTicketId(ticketId)
+    setShowTranscript(false)
+    setShowAuditLog(false)
+  }
 
   function handleResolution(action: Resolution) {
+    if (!activeTicket) return
+
+    const resolvedId = activeTicket.ticketId
     setSuccessMessage(`Resolved: ${action.title}`)
     setShowTranscript(false)
+    setShowAuditLog(false)
+
+    const remaining = sortTicketsByUrgency(
+      tickets.filter((t) => t.ticketId !== resolvedId),
+    )
+    setTickets(remaining)
+    setActiveTicketId(remaining[0]?.ticketId ?? '')
+
     window.setTimeout(() => {
       setSuccessMessage(null)
     }, 1600)
@@ -373,7 +432,8 @@ function App() {
     setIsAnalyzing(true)
     window.setTimeout(() => {
       const analyzed = simulateAIAnalysis(transcript)
-      setActiveTicket(analyzed)
+      setTickets((prev) => sortTicketsByUrgency([...prev, analyzed]))
+      setActiveTicketId(analyzed.ticketId)
       setShowTranscript(false)
       setShowAuditLog(false)
       setSuccessMessage(null)
@@ -384,206 +444,285 @@ function App() {
   }
 
   return (
-    <div className="relative min-h-svh bg-black text-neutral-200">
+    <div className="relative flex h-svh overflow-hidden bg-black text-neutral-200">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(14,165,233,0.12),_transparent_55%)]" />
 
-      <div className="relative mx-auto flex min-h-svh w-full max-w-3xl flex-col px-5 pb-28 pt-8 sm:px-8">
-        <header className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-            <div>
-              <p className="text-xs font-medium tracking-[0.2em] text-sky-400/80 uppercase">
-                Support Command
-              </p>
-              <h1 className="mt-1 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                OmniBrief AI // Support Triage
-              </h1>
-            </div>
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/60 bg-transparent px-3 py-2 text-sm font-medium text-sky-300 transition hover:border-sky-400 hover:bg-sky-500/10 hover:text-sky-200"
-            >
-              <Plus className="size-4" strokeWidth={2.25} />
-              Test New Ticket
-            </button>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right">
-            <p className="text-[10px] tracking-wider text-neutral-500 uppercase">
-              Active Ticket
+      {/* Live Triage Queue Sidebar */}
+      <aside className="relative z-10 flex h-svh w-80 shrink-0 flex-col border-r border-zinc-800 bg-black lg:w-96">
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-4">
+          <h2 className="text-sm font-semibold tracking-wide text-white">
+            Live Triage Queue
+          </h2>
+          <span className="rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 font-mono text-xs text-sky-300">
+            {sortedTickets.length}
+          </span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {sortedTickets.length === 0 ? (
+            <p className="px-3 py-8 text-center text-xs text-zinc-600">
+              Queue clear — parse a new transcript to enqueue.
             </p>
-            <p className="mt-0.5 font-mono text-sm text-white">
-              {activeTicket.ticketId}
-            </p>
-          </div>
-        </header>
+          ) : (
+            <ul className="space-y-1.5">
+              {sortedTickets.map((ticket) => {
+                const isActive = ticket.ticketId === activeTicket?.ticketId
+                return (
+                  <li key={ticket.ticketId}>
+                    <button
+                      type="button"
+                      onClick={() => selectTicket(ticket.ticketId)}
+                      className={`w-full rounded-lg border px-3 py-3 text-left transition ${
+                        isActive
+                          ? 'border-zinc-600 bg-zinc-900 text-white'
+                          : 'border-transparent bg-transparent text-zinc-500 hover:border-zinc-800 hover:bg-zinc-950 hover:text-zinc-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`truncate text-sm font-medium ${isActive ? 'text-white' : 'text-zinc-400'}`}
+                        >
+                          {ticket.customerName}
+                        </span>
+                        <span className="inline-flex shrink-0 items-center gap-1.5">
+                          <span
+                            className={`size-1.5 rounded-full ${urgencyDot(ticket.urgency)}`}
+                          />
+                          <span className="text-[10px] font-semibold tracking-wide uppercase">
+                            {ticket.urgency}
+                          </span>
+                        </span>
+                      </div>
+                      <p
+                        className={`mt-1.5 truncate text-xs ${isActive ? 'text-zinc-400' : 'text-zinc-600'}`}
+                      >
+                        {ticket.executiveSummary}
+                      </p>
+                      <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                        {ticket.ticketId}
+                      </p>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      </aside>
 
-        {successMessage && (
-          <div className="toast-enter mb-5 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-            <CheckCircle2 className="size-4 shrink-0" />
-            <span>{successMessage}</span>
-          </div>
-        )}
-
-        <article className="rounded-2xl border border-white/10 bg-neutral-950/80 p-5 shadow-[0_0_40px_rgba(0,0,0,0.6)] sm:p-7">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-semibold text-white">
-              {activeTicket.customerName}
-            </h2>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold tracking-wide uppercase ${urgencyStyles(activeTicket.urgency)}`}
-            >
-              <AlertCircle className="size-3.5" />
-              {activeTicket.urgency}
-            </span>
-          </div>
-
-          <div className="mt-4 flex items-center gap-3">
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${sentimentBarColor(activeTicket.urgency)}`}
-                style={{ width: `${Math.max(sentimentPercent, 8)}%` }}
-              />
-            </div>
-            <p className="shrink-0 text-sm text-neutral-300">
-              Sentiment{' '}
-              <span className="font-mono text-white">
-                {activeTicket.sentimentScore.toFixed(2)}
-              </span>
-              <span className="text-neutral-500">
-                {' '}
-                · {sentimentLabel(activeTicket.sentimentScore)}
-              </span>
-            </p>
-          </div>
-
-          <ul className="mt-6 space-y-2.5">
-            {activeTicket.visualBullets.map((bullet) => (
-              <li
-                key={bullet}
-                className="flex gap-2.5 text-sm leading-relaxed text-neutral-300"
-              >
-                <ChevronRight className="mt-0.5 size-4 shrink-0 text-sky-400" />
-                <span>{bullet}</span>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-neutral-500 uppercase">
-                <FileText className="size-3.5" />
-                Executive Summary
+      {/* Main Workstation */}
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-5 pb-28 pt-8 sm:px-8">
+          <header className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+              <div>
+                <p className="text-xs font-medium tracking-[0.2em] text-sky-400/80 uppercase">
+                  Support Command
+                </p>
+                <h1 className="mt-1 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                  OmniBrief AI // Support Triage
+                </h1>
               </div>
               <button
                 type="button"
-                onClick={() => setShowAuditLog((open) => !open)}
-                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
-                  showAuditLog
-                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                    : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
-                }`}
+                onClick={() => setModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/60 bg-transparent px-3 py-2 text-sm font-medium text-sky-300 transition hover:border-sky-400 hover:bg-sky-500/10 hover:text-sky-200"
               >
-                <Terminal className="size-3" />
-                {showAuditLog ? 'View Summary' : 'View AI Audit Trail'}
+                <Plus className="size-4" strokeWidth={2.25} />
+                Test New Ticket
               </button>
             </div>
-            <div className="min-h-[5.5rem]">
-              {showAuditLog ? (
-                <div className="h-full overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-emerald-400">
-                  {(activeTicket.auditLog ?? []).map((line) => (
-                    <p key={line} className="whitespace-pre-wrap">
-                      {line}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm leading-relaxed text-neutral-200">
-                  {activeTicket.executiveSummary}
+            {activeTicket && (
+              <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right">
+                <p className="text-[10px] tracking-wider text-neutral-500 uppercase">
+                  Active Ticket
                 </p>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-5">
-            <button
-              type="button"
-              onClick={() => setShowTranscript((open) => !open)}
-              className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm text-neutral-200 transition hover:border-white/20 hover:bg-white/[0.07]"
-            >
-              <span className="flex items-center gap-2">
-                <FileText className="size-4 text-neutral-400" />
-                View Raw Customer Transcript
-              </span>
-              <ChevronRight
-                className={`size-4 text-neutral-500 transition-transform ${showTranscript ? 'rotate-90' : ''}`}
-              />
-            </button>
-            {showTranscript && (
-              <pre className="mt-3 max-h-56 overflow-y-auto rounded-lg border border-white/10 bg-black/60 p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap text-neutral-400">
-                {activeTicket.rawTranscript}
-              </pre>
+                <p className="mt-0.5 font-mono text-sm text-white">
+                  {activeTicket.ticketId}
+                </p>
+              </div>
             )}
-          </div>
-        </article>
+          </header>
 
-        <section className="mt-7">
-          <h3 className="mb-3 text-xs font-medium tracking-[0.18em] text-neutral-500 uppercase">
-            1-Click Resolutions · Decision EV Engine
-          </h3>
-          <div className="flex flex-col gap-2.5">
-            {activeTicket.recommendedActions.map((action) => {
-              const EvIcon = action.evImpact >= 0 ? TrendingUp : TrendingDown
-              return (
-                <button
-                  key={action.title}
-                  type="button"
-                  onClick={() => handleResolution(action)}
-                  className="group rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-4 text-left transition hover:border-sky-400/50 hover:bg-sky-500/20"
-                >
-                  <div className="flex items-start gap-3">
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-sky-400 transition group-hover:text-sky-300" />
-                    <span className="flex-1 text-sm leading-snug text-sky-50">
-                      {action.title}
-                    </span>
-                    <ChevronRight className="mt-0.5 size-4 shrink-0 text-sky-500/60 transition group-hover:translate-x-0.5 group-hover:text-sky-300" />
+          {successMessage && (
+            <div className="toast-enter mb-5 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              <CheckCircle2 className="size-4 shrink-0" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {!activeTicket ? (
+            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 px-6 py-16 text-center">
+              <p className="text-sm text-zinc-500">
+                No tickets in queue. Use + Test New Ticket to parse a transcript.
+              </p>
+            </div>
+          ) : (
+            <>
+              <article className="rounded-2xl border border-white/10 bg-neutral-950/80 p-5 shadow-[0_0_40px_rgba(0,0,0,0.6)] sm:p-7">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-2xl font-semibold text-white">
+                    {activeTicket.customerName}
+                  </h2>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold tracking-wide uppercase ${urgencyStyles(activeTicket.urgency)}`}
+                  >
+                    <AlertCircle className="size-3.5" />
+                    {activeTicket.urgency}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${sentimentBarColor(activeTicket.urgency)}`}
+                      style={{ width: `${Math.max(sentimentPercent, 8)}%` }}
+                    />
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 pl-7">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-[11px] ${
-                        action.evImpact >= 0
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                          : 'border-red-500/30 bg-red-500/10 text-red-300'
+                  <p className="shrink-0 text-sm text-neutral-300">
+                    Sentiment{' '}
+                    <span className="font-mono text-white">
+                      {activeTicket.sentimentScore.toFixed(2)}
+                    </span>
+                    <span className="text-neutral-500">
+                      {' '}
+                      · {sentimentLabel(activeTicket.sentimentScore)}
+                    </span>
+                  </p>
+                </div>
+
+                <ul className="mt-6 space-y-2.5">
+                  {activeTicket.visualBullets.map((bullet) => (
+                    <li
+                      key={bullet}
+                      className="flex gap-2.5 text-sm leading-relaxed text-neutral-300"
+                    >
+                      <ChevronRight className="mt-0.5 size-4 shrink-0 text-sky-400" />
+                      <span>{bullet}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-neutral-500 uppercase">
+                      <FileText className="size-3.5" />
+                      Executive Summary
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAuditLog((open) => !open)}
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
+                        showAuditLog
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                          : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
                       }`}
                     >
-                      <EvIcon className="size-3" />
-                      {formatEvImpact(action.evImpact)}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-zinc-700/80 bg-zinc-900/80 px-2 py-1 text-[11px] text-zinc-400">
-                      <TrendingDown className="size-3" />↓{' '}
-                      {action.churnReduction} Churn Risk
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium ${riskBadgeStyles(action.riskProfile)}`}
-                    >
-                      <PieChart className="size-3" />
-                      {action.riskProfile} Risk
-                    </span>
+                      <Terminal className="size-3" />
+                      {showAuditLog ? 'View Summary' : 'View AI Audit Trail'}
+                    </button>
                   </div>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      </div>
+                  <div className="min-h-[5.5rem]">
+                    {showAuditLog ? (
+                      <div className="h-full overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-emerald-400">
+                        {(activeTicket.auditLog ?? []).map((line) => (
+                          <p key={line} className="whitespace-pre-wrap">
+                            {line}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm leading-relaxed text-neutral-200">
+                        {activeTicket.executiveSummary}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-      <div className="fixed inset-x-0 bottom-0 flex justify-center pb-8 pt-4">
-        <button
-          type="button"
-          aria-label="Voice command microphone"
-          className="mic-orb flex size-16 items-center justify-center rounded-full border border-sky-400/40 bg-gradient-to-b from-sky-400/30 to-sky-600/20 text-sky-200 backdrop-blur-sm transition hover:scale-105 hover:text-white active:scale-95"
-        >
-          <Mic className="size-7" strokeWidth={1.75} />
-        </button>
+                <div className="mt-5">
+                  <button
+                    type="button"
+                    onClick={() => setShowTranscript((open) => !open)}
+                    className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm text-neutral-200 transition hover:border-white/20 hover:bg-white/[0.07]"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileText className="size-4 text-neutral-400" />
+                      View Raw Customer Transcript
+                    </span>
+                    <ChevronRight
+                      className={`size-4 text-neutral-500 transition-transform ${showTranscript ? 'rotate-90' : ''}`}
+                    />
+                  </button>
+                  {showTranscript && (
+                    <pre className="mt-3 max-h-56 overflow-y-auto rounded-lg border border-white/10 bg-black/60 p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap text-neutral-400">
+                      {activeTicket.rawTranscript}
+                    </pre>
+                  )}
+                </div>
+              </article>
+
+              <section className="mt-7">
+                <h3 className="mb-3 text-xs font-medium tracking-[0.18em] text-neutral-500 uppercase">
+                  1-Click Resolutions · Decision EV Engine
+                </h3>
+                <div className="flex flex-col gap-2.5">
+                  {activeTicket.recommendedActions.map((action) => {
+                    const EvIcon =
+                      action.evImpact >= 0 ? TrendingUp : TrendingDown
+                    return (
+                      <button
+                        key={action.title}
+                        type="button"
+                        onClick={() => handleResolution(action)}
+                        className="group rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-4 text-left transition hover:border-sky-400/50 hover:bg-sky-500/20"
+                      >
+                        <div className="flex items-start gap-3">
+                          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-sky-400 transition group-hover:text-sky-300" />
+                          <span className="flex-1 text-sm leading-snug text-sky-50">
+                            {action.title}
+                          </span>
+                          <ChevronRight className="mt-0.5 size-4 shrink-0 text-sky-500/60 transition group-hover:translate-x-0.5 group-hover:text-sky-300" />
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2 pl-7">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-[11px] ${
+                              action.evImpact >= 0
+                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                : 'border-red-500/30 bg-red-500/10 text-red-300'
+                            }`}
+                          >
+                            <EvIcon className="size-3" />
+                            {formatEvImpact(action.evImpact)}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md border border-zinc-700/80 bg-zinc-900/80 px-2 py-1 text-[11px] text-zinc-400">
+                            <TrendingDown className="size-3" />↓{' '}
+                            {action.churnReduction} Churn Risk
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium ${riskBadgeStyles(action.riskProfile)}`}
+                          >
+                            <PieChart className="size-3" />
+                            {action.riskProfile} Risk
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+
+        <div className="pointer-events-none sticky bottom-0 flex justify-center pb-8 pt-4">
+          <button
+            type="button"
+            aria-label="Voice command microphone"
+            className="mic-orb pointer-events-auto flex size-16 items-center justify-center rounded-full border border-sky-400/40 bg-gradient-to-b from-sky-400/30 to-sky-600/20 text-sky-200 backdrop-blur-sm transition hover:scale-105 hover:text-white active:scale-95"
+          >
+            <Mic className="size-7" strokeWidth={1.75} />
+          </button>
+        </div>
       </div>
 
       {modalOpen && (

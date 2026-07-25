@@ -82,5 +82,47 @@
       "> [EV_Engine] Computing retention probabilities and resolution value...",
       "> [Done] Audit trail sealed \u00b7 SSO lockout incident ingested"
     ]
+  },
+  {
+    "ticketId": "ESC-48344",
+    "customerName": "Elena Vargas",
+    "urgency": "Medium",
+    "sentimentScore": 0.54,
+    "visualBullets": [
+      "Growth plan \u2014 invoice PDF export failing for AP team",
+      "Finance needs Q2 close documents by Friday",
+      "Workaround via CSV is incomplete for tax codes",
+      "No downtime, but process blocked for 6 controllers"
+    ],
+    "executiveSummary": "Elena Vargas (Brightline Retail, Growth) cannot export invoice PDFs after the latest billing UI update. AP needs the files for Friday's Q2 close. Sentiment is moderately annoyed but cooperative. Recommend restoring export endpoint, providing a temporary bulk ZIP of invoices, and confirming tax-code fields survive the CSV fallback.",
+    "rawTranscript": "Agent: OmniBrief Support, how can I help?\nElena: Hi \u2014 Name: Elena Vargas. Our AP team is confused about the new billing UI. The invoice PDF export button just spins and never downloads. We have a question about whether this is a known issue.\nAgent: Thanks Elena. Which workspace?\nElena: brightline-retail. We need help before Friday close. CSV export works but drops tax codes so it's not enough.",
+    "recommendedActions": [
+      {
+        "title": "Restore invoice PDF export and email bulk ZIP for Q2 invoices",
+        "evImpact": 3800,
+        "churnReduction": "44%",
+        "riskProfile": "Low"
+      },
+      {
+        "title": "Provide guided CSV workaround with tax-code mapping sheet",
+        "evImpact": 1600,
+        "churnReduction": "28%",
+        "riskProfile": "Medium"
+      },
+      {
+        "title": "Close as product feedback \u2014 no interim deliverable",
+        "evImpact": -12000,
+        "churnReduction": "8%",
+        "riskProfile": "High"
+      }
+    ],
+    "auditLog": [
+      "> [Sys] Initializing semantic parser...",
+      "> [Lex] Keyword matches detected: confused, question, help, issue",
+      "> [Model] Sentiment classification score: 0.54",
+      "> [Logic] Applying urgency weights -> MEDIUM",
+      "> [EV_Engine] Computing retention probabilities and resolution value...",
+      "> [Done] Audit trail sealed \u00b7 billing export friction ingested"
+    ]
   }
 ]
