@@ -6,11 +6,21 @@ import {
   FileText,
   Loader2,
   Mic,
+  PieChart,
   Plus,
+  TrendingDown,
+  TrendingUp,
   X,
   Zap,
 } from 'lucide-react'
 import tickets from './mockData.json'
+
+interface Resolution {
+  title: string
+  evImpact: number
+  churnReduction: string
+  riskProfile: 'Low' | 'Medium' | 'High'
+}
 
 interface Ticket {
   ticketId: string
@@ -20,7 +30,7 @@ interface Ticket {
   visualBullets: string[]
   executiveSummary: string
   rawTranscript: string
-  recommendedActions: string[]
+  recommendedActions: Resolution[]
 }
 
 const CRITICAL_WORDS = [
@@ -115,29 +125,76 @@ function extractBullets(rawTranscript: string): string[] {
   return unique
 }
 
-function buildResolutions(urgency: string, bullets: string[]): string[] {
+function buildResolutions(urgency: string, bullets: string[]): Resolution[] {
   const primaryIssue = bullets[0] ?? 'the reported account issue'
+  const shortIssue =
+    primaryIssue.length > 56 ? `${primaryIssue.slice(0, 53)}…` : primaryIssue
 
   if (urgency === 'CRITICAL') {
     return [
-      `Issue emergency refund / credit and written confirmation within 1 hour`,
-      `Escalate to Tier-3 + legal liaison for: ${primaryIssue.slice(0, 60)}`,
-      `Apply $500 goodwill credit and schedule executive callback today`,
+      {
+        title: 'Issue full refund / credit with written confirmation within 1 hour',
+        evImpact: 12500 + Math.floor(Math.random() * 3500),
+        churnReduction: `${78 + Math.floor(Math.random() * 8)}%`,
+        riskProfile: 'Low',
+      },
+      {
+        title: `Escalate to Tier-3 + legal liaison for: ${shortIssue}`,
+        evImpact: 8400 + Math.floor(Math.random() * 2200),
+        churnReduction: `${58 + Math.floor(Math.random() * 10)}%`,
+        riskProfile: 'Medium',
+      },
+      {
+        title: 'Standard apology only — defer remediation to next billing cycle',
+        evImpact: -240000,
+        churnReduction: '0%',
+        riskProfile: 'High',
+      },
     ]
   }
 
   if (urgency === 'MEDIUM') {
     return [
-      `Open standard troubleshooting case for: ${primaryIssue.slice(0, 70)}`,
-      `Send knowledge-base steps and confirm resolution within 4 hours`,
-      `Offer $50 service credit if issue persists after first response`,
+      {
+        title: `Apply $500 service credit and own: ${shortIssue}`,
+        evImpact: 4200 + Math.floor(Math.random() * 1800),
+        churnReduction: `${42 + Math.floor(Math.random() * 12)}%`,
+        riskProfile: 'Low',
+      },
+      {
+        title: 'Send guided troubleshooting steps and confirm within 4 hours',
+        evImpact: 2100 + Math.floor(Math.random() * 900),
+        churnReduction: `${28 + Math.floor(Math.random() * 10)}%`,
+        riskProfile: 'Medium',
+      },
+      {
+        title: 'Close ticket with template reply — no proactive outreach',
+        evImpact: -18500 - Math.floor(Math.random() * 4000),
+        churnReduction: '5%',
+        riskProfile: 'High',
+      },
     ]
   }
 
   return [
-    `Acknowledge request and log a low-priority follow-up ticket`,
-    `Send proactive tips related to: ${primaryIssue.slice(0, 70)}`,
-    `Mark for CSAT check-in after successful resolution`,
+    {
+      title: 'Acknowledge request and log a low-priority follow-up ticket',
+      evImpact: 900 + Math.floor(Math.random() * 400),
+      churnReduction: `${12 + Math.floor(Math.random() * 8)}%`,
+      riskProfile: 'Low',
+    },
+    {
+      title: `Send proactive tips related to: ${shortIssue}`,
+      evImpact: 650 + Math.floor(Math.random() * 250),
+      churnReduction: `${8 + Math.floor(Math.random() * 6)}%`,
+      riskProfile: 'Low',
+    },
+    {
+      title: 'Mark for CSAT check-in after successful resolution',
+      evImpact: 320 + Math.floor(Math.random() * 180),
+      churnReduction: `${4 + Math.floor(Math.random() * 5)}%`,
+      riskProfile: 'Medium',
+    },
   ]
 }
 
@@ -231,6 +288,26 @@ function sentimentBarColor(urgency: string) {
   }
 }
 
+function formatEvImpact(value: number): string {
+  const abs = Math.abs(value)
+  const formatted =
+    abs >= 100000
+      ? `$${Math.round(abs / 1000).toLocaleString()}K`
+      : `$${abs.toLocaleString()}`
+  return `${value >= 0 ? '+' : '-'}${formatted} EV`
+}
+
+function riskBadgeStyles(risk: Resolution['riskProfile']) {
+  switch (risk) {
+    case 'Low':
+      return 'border-emerald-500/35 bg-emerald-500/15 text-emerald-300'
+    case 'Medium':
+      return 'border-amber-500/35 bg-amber-500/15 text-amber-300'
+    case 'High':
+      return 'border-red-500/35 bg-red-500/15 text-red-300'
+  }
+}
+
 function App() {
   const [activeTicket, setActiveTicket] = useState<Ticket>(tickets[0] as Ticket)
   const [showTranscript, setShowTranscript] = useState(false)
@@ -241,8 +318,8 @@ function App() {
 
   const sentimentPercent = Math.round(activeTicket.sentimentScore * 100)
 
-  function handleResolution(action: string) {
-    setSuccessMessage(`Resolved: ${action}`)
+  function handleResolution(action: Resolution) {
+    setSuccessMessage(`Resolved: ${action.title}`)
     setShowTranscript(false)
     window.setTimeout(() => {
       setSuccessMessage(null)
@@ -390,21 +467,50 @@ function App() {
 
         <section className="mt-7">
           <h3 className="mb-3 text-xs font-medium tracking-[0.18em] text-neutral-500 uppercase">
-            1-Click Resolutions
+            1-Click Resolutions · Decision EV Engine
           </h3>
           <div className="flex flex-col gap-2.5">
-            {activeTicket.recommendedActions.map((action) => (
-              <button
-                key={action}
-                type="button"
-                onClick={() => handleResolution(action)}
-                className="group flex items-start gap-3 rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3.5 text-left text-sm text-sky-100 transition hover:border-sky-400/50 hover:bg-sky-500/20"
-              >
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-sky-400 transition group-hover:text-sky-300" />
-                <span className="flex-1 leading-snug">{action}</span>
-                <ChevronRight className="mt-0.5 size-4 shrink-0 text-sky-500/60 transition group-hover:translate-x-0.5 group-hover:text-sky-300" />
-              </button>
-            ))}
+            {activeTicket.recommendedActions.map((action) => {
+              const EvIcon = action.evImpact >= 0 ? TrendingUp : TrendingDown
+              return (
+                <button
+                  key={action.title}
+                  type="button"
+                  onClick={() => handleResolution(action)}
+                  className="group rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-4 text-left transition hover:border-sky-400/50 hover:bg-sky-500/20"
+                >
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-sky-400 transition group-hover:text-sky-300" />
+                    <span className="flex-1 text-sm leading-snug text-sky-50">
+                      {action.title}
+                    </span>
+                    <ChevronRight className="mt-0.5 size-4 shrink-0 text-sky-500/60 transition group-hover:translate-x-0.5 group-hover:text-sky-300" />
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 pl-7">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-[11px] ${
+                        action.evImpact >= 0
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                          : 'border-red-500/30 bg-red-500/10 text-red-300'
+                      }`}
+                    >
+                      <EvIcon className="size-3" />
+                      {formatEvImpact(action.evImpact)}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-zinc-700/80 bg-zinc-900/80 px-2 py-1 text-[11px] text-zinc-400">
+                      <TrendingDown className="size-3" />↓{' '}
+                      {action.churnReduction} Churn Risk
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium ${riskBadgeStyles(action.riskProfile)}`}
+                    >
+                      <PieChart className="size-3" />
+                      {action.riskProfile} Risk
+                    </span>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </section>
       </div>

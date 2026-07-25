@@ -13,9 +13,24 @@
     "executiveSummary": "Marcus Chen (Acme Logistics, Enterprise) was double-billed $18,400 after a failed self-serve downgrade from Scale to Growth. Finance auto-retry compounded the charge. Sentiment is severely negative; he has opened a chargeback intent and asked for a same-day credit plus written confirmation. Recommend immediate refund, plan correction, and a goodwill credit before the dispute window closes.",
     "rawTranscript": "Agent: Hi Marcus, thanks for contacting OmniBrief Support. How can I help?\nMarcus: This is the third time I've called. Your system charged my company twice — eighteen thousand four hundred dollars — when I tried to downgrade our plan. That money left our operating account this morning.\nAgent: I'm sorry to hear that. Can I confirm the account email?\nMarcus: marcus.chen@acmelogistics.com. Ticket ESC-48291. Look, I've already spoken to two agents who said they'd escalate. Nobody called back. Our CFO is furious. If this isn't reversed today I'm filing a dispute with the bank and looping in our counsel.\nAgent: I understand the urgency. Let me pull up the billing events…\nMarcus: Don't make me wait on hold again. I need a credit issued now, the plan fixed to Growth, and something in writing. We've paid you $240K this year and this is how we're treated?",
     "recommendedActions": [
-      "Issue full duplicate-charge refund ($18,400) and email confirmation",
-      "Correct subscription to Growth plan and lock billing flags",
-      "Apply $500 goodwill credit + schedule CSM callback within 1 hour"
+      {
+        "title": "Issue full duplicate-charge refund ($18,400) and email confirmation",
+        "evImpact": 12500,
+        "churnReduction": "82%",
+        "riskProfile": "Low"
+      },
+      {
+        "title": "Correct subscription to Growth plan and lock billing flags",
+        "evImpact": 8400,
+        "churnReduction": "61%",
+        "riskProfile": "Low"
+      },
+      {
+        "title": "Standard apology only — defer refund to next billing cycle",
+        "evImpact": -240000,
+        "churnReduction": "0%",
+        "riskProfile": "High"
+      }
     ]
   },
   {
@@ -32,9 +47,24 @@
     "executiveSummary": "Priya Nair (Northstar Health, Pro) cannot complete SSO login after rotating their Okta signing certificate. 47 agents are locked out of the workspace ahead of a tomorrow 9 AM ET go-live. Sentiment is frustrated but cooperative. Recommend pushing an emergency IdP metadata refresh, validating assertion attributes, and providing a temporary password fallback so training can proceed tonight.",
     "rawTranscript": "Agent: OmniBrief Support, you're speaking with Jordan. How can I help today?\nPriya: Our entire support floor is locked out. We rotated the Okta signing cert last night per your security guide and now every SAML login just spins and dumps us back to the IdP.\nAgent: Sorry about that — which workspace?\nPriya: northstar-health.omnibrief.io. Ticket ESC-48307. We go live tomorrow at 9 AM Eastern with 47 new agents. If they can't get in, we slip the launch and my VP is already asking whether we should pause the rollout and re-evaluate vendors.\nAgent: Got it. Did the certificate thumbprint update in the SSO settings?\nPriya: I uploaded the new metadata XML. Status shows 'Connected' but logins still fail. I've attached three HAR files. Please — we need a workaround tonight so training isn't wasted.",
     "recommendedActions": [
-      "Force-refresh SAML IdP metadata and re-validate signing cert",
-      "Enable temporary password fallback for the Northstar workspace",
-      "Assign senior SSO engineer + send status update every 30 minutes"
+      {
+        "title": "Force-refresh SAML IdP metadata and re-validate signing cert",
+        "evImpact": 18500,
+        "churnReduction": "74%",
+        "riskProfile": "Low"
+      },
+      {
+        "title": "Enable temporary password fallback for the Northstar workspace",
+        "evImpact": 9200,
+        "churnReduction": "55%",
+        "riskProfile": "Medium"
+      },
+      {
+        "title": "Assign senior SSO engineer + send status update every 30 minutes",
+        "evImpact": 6400,
+        "churnReduction": "48%",
+        "riskProfile": "Low"
+      }
     ]
   }
 ]
