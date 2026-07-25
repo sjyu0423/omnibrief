@@ -8,6 +8,7 @@ import {
   Mic,
   PieChart,
   Plus,
+  Terminal,
   TrendingDown,
   TrendingUp,
   X,
@@ -31,6 +32,7 @@ interface Ticket {
   executiveSummary: string
   rawTranscript: string
   recommendedActions: Resolution[]
+  auditLog: string[]
 }
 
 const CRITICAL_WORDS = [
@@ -66,6 +68,36 @@ function containsWord(text: string, words: string[]) {
     const pattern = new RegExp(`\\b${word}\\b`, 'i')
     return pattern.test(lower)
   })
+}
+
+function findMatchedKeywords(text: string, words: string[]): string[] {
+  const lower = text.toLowerCase()
+  return words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(lower))
+}
+
+function buildAuditLog(
+  rawTranscript: string,
+  urgency: string,
+  sentimentScore: number,
+): string[] {
+  const matched = [
+    ...findMatchedKeywords(rawTranscript, CRITICAL_WORDS),
+    ...findMatchedKeywords(rawTranscript, MILD_WORDS),
+  ]
+  const uniqueMatched = [...new Set(matched)]
+  const keywordLine =
+    uniqueMatched.length > 0
+      ? uniqueMatched.join(', ')
+      : 'none (neutral lexicon)'
+
+  return [
+    '> [Sys] Initializing semantic parser...',
+    `> [Lex] Keyword matches detected: ${keywordLine}`,
+    `> [Model] Sentiment classification score: ${sentimentScore.toFixed(2)}`,
+    `> [Logic] Applying urgency weights -> ${urgency}`,
+    '> [EV_Engine] Computing retention probabilities and resolution value...',
+    `> [Done] Audit trail sealed · ${rawTranscript.trim().length} chars ingested`,
+  ]
 }
 
 function extractCustomerName(rawTranscript: string): string {
@@ -249,6 +281,7 @@ function simulateAIAnalysis(rawTranscript: string): Ticket {
     executiveSummary: buildSummary(name, urgency, sentimentLabelText, bullets),
     rawTranscript: rawTranscript.trim(),
     recommendedActions: buildResolutions(urgency, bullets),
+    auditLog: buildAuditLog(rawTranscript, urgency, sentimentScore),
   }
 }
 
@@ -311,6 +344,7 @@ function riskBadgeStyles(risk: Resolution['riskProfile']) {
 function App() {
   const [activeTicket, setActiveTicket] = useState<Ticket>(tickets[0] as Ticket)
   const [showTranscript, setShowTranscript] = useState(false)
+  const [showAuditLog, setShowAuditLog] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [rawInput, setRawInput] = useState('')
@@ -341,6 +375,7 @@ function App() {
       const analyzed = simulateAIAnalysis(transcript)
       setActiveTicket(analyzed)
       setShowTranscript(false)
+      setShowAuditLog(false)
       setSuccessMessage(null)
       setIsAnalyzing(false)
       setModalOpen(false)
@@ -434,13 +469,39 @@ function App() {
           </ul>
 
           <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium tracking-wider text-neutral-500 uppercase">
-              <FileText className="size-3.5" />
-              Executive Summary
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-neutral-500 uppercase">
+                <FileText className="size-3.5" />
+                Executive Summary
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAuditLog((open) => !open)}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
+                  showAuditLog
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                    : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                <Terminal className="size-3" />
+                {showAuditLog ? 'View Summary' : 'View AI Audit Trail'}
+              </button>
             </div>
-            <p className="text-sm leading-relaxed text-neutral-200">
-              {activeTicket.executiveSummary}
-            </p>
+            <div className="min-h-[5.5rem]">
+              {showAuditLog ? (
+                <div className="h-full overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-emerald-400">
+                  {(activeTicket.auditLog ?? []).map((line) => (
+                    <p key={line} className="whitespace-pre-wrap">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed text-neutral-200">
+                  {activeTicket.executiveSummary}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="mt-5">
